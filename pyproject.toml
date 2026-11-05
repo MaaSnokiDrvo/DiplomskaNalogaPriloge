@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "NetSentinel IDS Contributors"}
 ]
-keywords = ["ids", "intrusion-detection", "network-security", "pytorch", "pcap"]
+keywords = ["ids", "intrusion-detection", "network-security", "pcap"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -30,7 +30,6 @@ classifiers = [
 dependencies = [
     "PyQt5>=5.15,<5.16",
     "requests>=2.31",
-    "numpy>=1.24",
     "pyqtgraph>=0.13",
     "websocket-client>=1.6",
 ]
@@ -43,16 +42,7 @@ dev = [
     "pylint>=2.0",
     "mypy>=1.0",
 ]
-ml = [
-    "torch>=2.0",
-    "numpy>=1.24",
-]
 db = [
-    "psycopg2-binary>=2.9",
-]
-full = [
-    "torch>=2.0",
-    "numpy>=1.24",
     "psycopg2-binary>=2.9",
 ]
 

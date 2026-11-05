@@ -15,10 +15,7 @@ from PyQt5.QtWidgets import QLabel
 # Uvoz poslovne logike in gradnikov.
 from api_client import APIClient
 from websocket_client import WebSocketClient
-from data_pipeline import DataPipeline, ActiveLearning
-from model_trainer import ModelTrainer
 from response_engine import ResponseEngine
-from continuous_retraining import ContinuousRetrainingScheduler
 from attack_playbooks import PlaybookEngine
 from dashboard import DashboardWidget
 from alerts import AlertsWidget
@@ -198,7 +195,6 @@ class NetSentinelMainWindow(QMainWindow):
             pass
         self._threat_worker = ThreatProcessingWorker(
             getattr(self, "response_engine", None),
-            getattr(self, "data_pipeline", None),
         )
         self._threat_worker.moveToThread(self._threat_thread)
         self.request_process_threat.connect(self._threat_worker.process)
@@ -259,24 +255,8 @@ class NetSentinelMainWindow(QMainWindow):
 
         if self._headless_mode:
             self._wire_ws_signals()
-            self.model_trainer = None
-            self.data_pipeline = None
-            self.active_learning = None
-            self.retraining_scheduler = None
             print("[DEBUG] _on_api_status: headless mode, response engine only")
             return
-
-        try:
-            self.model_trainer = ModelTrainer()
-            self.data_pipeline = DataPipeline()
-            self.active_learning = ActiveLearning(self.data_pipeline)
-            self.retraining_scheduler = ContinuousRetrainingScheduler(
-                self.model_trainer,
-                self.data_pipeline,
-                self.active_learning
-            )
-        except Exception as e:
-            print(f"[DEBUG] model/data init warning: {e}")
 
         try:
             self._setup_threat_worker()
@@ -345,7 +325,6 @@ class NetSentinelMainWindow(QMainWindow):
                 if self._placeholder_indices['automation'] is not None and not self._headless_mode:
                     real_automation = AutomationWidget(
                         response_engine=self.response_engine,
-                        retraining_scheduler=getattr(self, 'retraining_scheduler', None),
                         enable_timer=not self.ui_lite and not self.disable_automation_timer,
                         threat_callback=self.on_threat_received,
                         automation_mode_callback=self._set_automation_enabled,
@@ -1126,11 +1105,6 @@ class NetSentinelMainWindow(QMainWindow):
                         self.response_engine.execute_response(payload)
                     except Exception:
                         pass
-                if hasattr(self, 'data_pipeline') and self.data_pipeline and hasattr(self.data_pipeline, 'add_threat') and not already_processed:
-                    try:
-                        self.data_pipeline.add_threat(payload)
-                    except Exception:
-                        pass
         except Exception:
             pass
 
@@ -1209,10 +1183,9 @@ class StatusSnapshotWorker(QObject):
 class ThreatProcessingWorker(QObject):
     finished = pyqtSignal(object)
 
-    def __init__(self, response_engine=None, data_pipeline=None):
+    def __init__(self, response_engine=None):
         super().__init__()
         self.response_engine = response_engine
-        self.data_pipeline = data_pipeline
 
     @pyqtSlot(object)
     def process(self, data):
@@ -1223,11 +1196,6 @@ class ThreatProcessingWorker(QObject):
             if self.response_engine and automation_enabled and not already_processed:
                 try:
                     self.response_engine.execute_response(payload)
-                except Exception:
-                    pass
-            if self.data_pipeline and hasattr(self.data_pipeline, "add_threat") and not already_processed:
-                try:
-                    self.data_pipeline.add_threat(payload)
                 except Exception:
                     pass
         finally:

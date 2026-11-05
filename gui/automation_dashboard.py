@@ -4,9 +4,7 @@ Gradnik nadzorne plošče avtomatizacije - prikaz odzivov in naprednih funkcij.
 
 import logging
 import traceback
-import json
 from datetime import datetime
-from pathlib import Path
 
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QFont
@@ -40,27 +38,9 @@ from ui_components import SummaryCard, card_style as _card_style
 class AutomationWorker(QObject):
     finished = pyqtSignal(dict)
 
-    def __init__(self, response_engine=None, scheduler=None):
+    def __init__(self, response_engine=None):
         super().__init__()
         self.response_engine = response_engine
-        self.scheduler = scheduler
-
-    @staticmethod
-    def _load_model_metrics() -> dict:
-        metrics_path = Path(__file__).resolve().parent.parent / "model.metrics.json"
-        try:
-            if metrics_path.exists():
-                with open(metrics_path, "r", encoding="utf-8") as handle:
-                    metrics = json.load(handle)
-                return {
-                    "accuracy": float(metrics.get("accuracy", 0.0) or 0.0),
-                    "f1": float(metrics.get("f1", 0.0) or 0.0),
-                    "precision": float(metrics.get("precision", 0.0) or 0.0),
-                    "recall": float(metrics.get("recall", 0.0) or 0.0),
-                }
-        except Exception:
-            pass
-        return {"accuracy": 0.0, "f1": 0.0, "precision": 0.0, "recall": 0.0}
 
     @pyqtSlot()
     def refresh(self):
@@ -68,26 +48,11 @@ class AutomationWorker(QObject):
             "response_stats": {},
             "blocked_ips": [],
             "blocked_ip_details": [],
-            "training_status": {},
-            "retrain_history": [],
             "statistics": {},
             "playbook_history": [],
             "playbook_stats": {},
         }
         try:
-            baseline_metrics = self._load_model_metrics()
-            result["training_status"] = {
-                "running": False,
-                "baseline_metrics": baseline_metrics,
-                "active_learning_stats": {"new_samples": 0},
-                "source": "osnovne metrike",
-            }
-            result["statistics"] = {
-                "total_retrains": 0,
-                "successful_retrains": 0,
-                "failed_retrains": 0,
-                "baseline_metrics": baseline_metrics,
-            }
             if self.response_engine:
                 try:
                     result["response_stats"] = self.response_engine.get_stats()
@@ -118,30 +83,6 @@ class AutomationWorker(QObject):
                 except Exception:
                     pass
 
-            if self.scheduler:
-                try:
-                    scheduler_status = self.scheduler.get_current_status()
-                    if scheduler_status:
-                        scheduler_baseline = scheduler_status.get("baseline_metrics", {}) or {}
-                        if not any(float(scheduler_baseline.get(key, 0.0) or 0.0) for key in ("accuracy", "f1")):
-                            scheduler_status["baseline_metrics"] = baseline_metrics
-                            scheduler_status["source"] = "osnovne metrike + razporejevalnik miruje"
-                        result["training_status"] = scheduler_status
-                except Exception:
-                    pass
-                try:
-                    result["retrain_history"] = self.scheduler.get_retrain_history(limit=10)
-                except Exception:
-                    pass
-                try:
-                    scheduler_stats = self.scheduler.get_stats()
-                    if scheduler_stats:
-                        scheduler_baseline = scheduler_stats.get("baseline_metrics", {}) or {}
-                        if not any(float(scheduler_baseline.get(key, 0.0) or 0.0) for key in ("accuracy", "f1")):
-                            scheduler_stats["baseline_metrics"] = baseline_metrics
-                        result["statistics"] = scheduler_stats
-                except Exception:
-                    pass
         except Exception as exc:
             result["error"] = str(exc)
         self.finished.emit(result)
@@ -150,10 +91,9 @@ class AutomationWorker(QObject):
 class AutomationActionWorker(QObject):
     finished = pyqtSignal(str, dict)
 
-    def __init__(self, response_engine=None, scheduler=None, threat_callback=None):
+    def __init__(self, response_engine=None, threat_callback=None):
         super().__init__()
         self.response_engine = response_engine
-        self.scheduler = scheduler
         self.threat_callback = threat_callback
 
     @pyqtSlot(dict)
@@ -165,22 +105,7 @@ class AutomationActionWorker(QObject):
             "refresh": True,
         }
         try:
-            if action == "manual_retrain":
-                if not self.scheduler:
-                    result["message"] = "Razporejevalnik ponovnega učenja še ni na voljo"
-                else:
-                    retrain_id = self.scheduler.manual_retrain()
-                    metrics = {}
-                    try:
-                        metrics = self.scheduler.get_retrain_metrics(retrain_id) or {}
-                    except Exception:
-                        metrics = {}
-                    if metrics.get("status") == "failed":
-                        result["message"] = metrics.get("error_message") or f"Ročno ponovno učenje ni uspelo (ID: {retrain_id})"
-                    else:
-                        result["ok"] = True
-                        result["message"] = f"Ročno ponovno učenje je zaključeno oziroma sproženo (ID: {retrain_id})"
-            elif action == "unblock_ip":
+            if action == "unblock_ip":
                 ip = str(payload.get("ip", "")).strip()
                 if not ip:
                     result["message"] = "IP naslov ni izbran"
@@ -194,8 +119,7 @@ class AutomationActionWorker(QObject):
                 playbook_id = payload.get("playbook_id")
                 if self.response_engine:
                     self.response_engine.execute_response(threat)
-                if self.scheduler and hasattr(self.scheduler, "pipeline") and self.scheduler.pipeline:
-                    self.scheduler.pipeline.add_threat(threat)
+
                 threat["_automation_response_applied"] = True
                 if playbook_id:
                     playbook_engine = getattr(self.response_engine, "playbook_engine", None) if self.response_engine else None
@@ -226,7 +150,6 @@ class AutomationWidget(QWidget):
 
     ACTION_LABELS = {
         "inject_threat": "demo dogodek",
-        "manual_retrain": "ročno ponovno učenje",
         "unblock_ip": "odblokiranje IP naslova",
     }
 
@@ -247,21 +170,10 @@ class AutomationWidget(QWidget):
         "UNKNOWN": "neznano",
     }
 
-    SOURCE_LABELS = {
-        "scheduler": "razporejevalnik",
-        "baseline metrics": "osnovne metrike",
-        "model.metrics.json": "osnovne metrike",
-        "model.metrics.json + scheduler idle": "osnovne metrike + razporejevalnik miruje",
-    }
-
     STATUS_LABELS = {
         "idle": "miruje",
         "pending": "čaka",
         "running": "teče",
-        "preparing": "priprava",
-        "training": "učenje",
-        "evaluating": "ocenjevanje",
-        "saving": "shranjevanje",
         "completed": "zaključeno",
         "success": "uspešno",
         "failed": "neuspešno",
@@ -272,7 +184,6 @@ class AutomationWidget(QWidget):
     def __init__(
         self,
         response_engine=None,
-        retraining_scheduler=None,
         enable_timer: bool = True,
         threat_callback=None,
         automation_mode_callback=None,
@@ -280,7 +191,6 @@ class AutomationWidget(QWidget):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.response_engine = response_engine
-        self.scheduler = retraining_scheduler
         self.threat_callback = threat_callback
         self.automation_mode_callback = automation_mode_callback
         self._closing = False
@@ -307,7 +217,7 @@ class AutomationWidget(QWidget):
             register(self._worker_thread)
         except Exception:
             pass
-        self._worker = AutomationWorker(self.response_engine, self.scheduler)
+        self._worker = AutomationWorker(self.response_engine)
         self._worker.moveToThread(self._worker_thread)
         self.request_refresh.connect(self._worker.refresh)
         self._worker.finished.connect(self._on_worker_finished)
@@ -319,7 +229,7 @@ class AutomationWidget(QWidget):
             register(self._action_thread)
         except Exception:
             pass
-        self._action_worker = AutomationActionWorker(self.response_engine, self.scheduler, self.threat_callback)
+        self._action_worker = AutomationActionWorker(self.response_engine, self.threat_callback)
         self._action_worker.moveToThread(self._action_thread)
         self.request_action.connect(self._action_worker.run_action)
         self._action_worker.finished.connect(self._on_action_finished)
@@ -354,11 +264,6 @@ class AutomationWidget(QWidget):
     def _severity_label(cls, value) -> str:
         text = str(getattr(value, "value", value) or "").upper()
         return cls.SEVERITY_LABELS.get(text, text.lower())
-
-    @classmethod
-    def _source_label(cls, value) -> str:
-        text = str(getattr(value, "value", value) or "")
-        return cls.SOURCE_LABELS.get(text.lower(), text)
 
     @classmethod
     def _status_label(cls, value) -> str:
@@ -712,12 +617,6 @@ class AutomationWidget(QWidget):
 
     def _trigger_demo_low(self):
         self._inject_threat(self._build_demo_threat("10.10.10.10", "192.168.1.100", 443, "TCP", "LOW", 0.10, ["benign"], "Samo zabeleži. Dodatna akcija ni potrebna."))
-
-    def _on_manual_retrain(self):
-        if not self.scheduler:
-            QMessageBox.warning(self, "Ponovno učenje", "Razporejevalnik ponovnega učenja še ni na voljo.")
-            return
-        self._queue_action({"action": "manual_retrain"}, "Začenjam ročno ponovno učenje v ozadju...")
 
     def _on_unblock_ip(self):
         selected = self.blocked_ips_table.selectedItems()
