@@ -1,45 +1,55 @@
 # NetSentinel IDS
 
-NetSentinel IDS je prototipni sistem za demonstracijo zaznavanja omrežnih
-groženj. Uporablja C++ zaledje, REST/WebSocket API in PyQt grafični vmesnik.
+Prototip sistema za zaznavanje in obravnavo omrežnih groženj za lokalno
+demonstracijo v okviru diplomske naloge.
 
-## Lokalni demonstracijski zagon
+## Vsebina
 
-Zahteve:
+- C++ zaledje za zajem in obdelavo omrežnih tokov,
+- REST in WebSocket komunikacija,
+- PyQt grafični vmesnik,
+- prikaz alarmov, tokov in analitike,
+- PostgreSQL arhiviranje incidentov,
+- lokalni demonstracijski odzivi.
 
-- Windows 10/11
-- Python 3.10 ali novejši
-- CMake in C++ razvojno okolje
-- Npcap za zajem dejanskega prometa
-- prevedeno zaledje v mapi `build`
+## Zahteve
 
-Namestitev Python odvisnosti:
+- Windows 10 ali 11,
+- Python 3.10 ali novejši,
+- CMake in C++ razvojno okolje,
+- Npcap SDK,
+- PostgreSQL samo za prikaz arhiviranja incidentov.
+
+## Namestitev in zagon
 
 ```powershell
+python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\gui\requirements.txt
-```
-
-Prevajanje:
-
-```powershell
 cmake -S . -B build -DNPCAP_SDK_DIR=C:\dev\npcap-sdk-1.16
 cmake --build build --config Release
-```
-
-Zagon:
-
-```powershell
 .\RUN_FULL.bat
 ```
 
-Za varno zapiranje lokalne demonstracije uporabi gumb **Izhod** v glavnem
-oknu. Ta ustavi zaledje, zapre grafični vmesnik in omogoči zaprtje zagonskih
-konzol.
+Zaganjalnik uporabi simulator dogodkov, zato za prikaz ni potreben dejanski
+napad. Za zajem prometa v živo mora biti nameščen Npcap.
 
-## Omejitve
+## PostgreSQL
 
-Projekt je namenjen lokalni demonstraciji in diplomski predstavitvi. Ne
-predstavlja produkcijsko pripravljenega sistema za zaščito omrežij. Odzivi so
-demonstracijski in ne spreminjajo pravil sistemskega požarnega zidu.
+PostgreSQL je izbiren. Nastavitve ustvari iz `.env.example` in jih shrani v
+lokalno datoteko `.env.local`, ki se ne objavi na GitHubu.
 
-Podrobnejša slovenska navodila so v [README_SLO.md](README_SLO.md).
+```powershell
+psql -h localhost -p 5432 -U postgres -d postgres -f .\scripts\postgres_demo_setup.sql
+.\RUN_DB_CHECK.bat
+```
+
+## Preverjanje
+
+```powershell
+.\.venv\Scripts\python.exe -m compileall -q gui setup_infrastructure.py
+```
+
+Za varno zapiranje uporabi gumb **Izhod** v glavnem oknu. Odzivni modul je
+demonstracijski in ne spreminja pravil sistemskega požarnega zidu.
+
+Diplomska naloga in dispozicija sta v mapi `docs/`.
