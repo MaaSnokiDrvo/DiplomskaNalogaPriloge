@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netsentinel-ids"
+version = "1.0.0"
+description = "Inteligentni sistem za detekcijo omreznih napadov in demonstracijo IDS odzivov"
+readme = "README_SLO.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "NetSentinel IDS Contributors"}
+]
+keywords = ["ids", "intrusion-detection", "network-security", "pytorch", "pcap"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: Security",
+]
+
+dependencies = [
+    "PyQt5>=5.15,<5.16",
+    "requests>=2.31",
+    "numpy>=1.24",
+    "pyqtgraph>=0.13",
+    "websocket-client>=1.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "pylint>=2.0",
+    "mypy>=1.0",
+]
+ml = [
+    "torch>=2.0",
+    "numpy>=1.24",
+]
+db = [
+    "psycopg2-binary>=2.9",
+]
+full = [
+    "torch>=2.0",
+    "numpy>=1.24",
+    "psycopg2-binary>=2.9",
+]
+
+[tool.setuptools]
+packages = ["gui"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.pylint.messages_control]
+disable = [
+    "C0111",  # Missing module docstring
+    "C0103",  # Invalid name
+]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
